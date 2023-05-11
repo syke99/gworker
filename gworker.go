@@ -43,7 +43,7 @@ func NewPool[T any](dataSources []T, worker func(dataSource any, params []any), 
 	return &p, nil
 }
 
-// Size determines the max number of concurrent goroutines to run at once whenever the Pool has
+// Size determines the max number of concurrent workers to run at once whenever the Pool has
 // been started. If Size is not called, a Pool will default to a size of 5
 func (p *Pool[T]) Size(size int) *Pool[T] {
 	p.size = size
