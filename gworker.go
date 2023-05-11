@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 )
 
 // Pool is a Generic worker pool implementation
@@ -183,8 +184,12 @@ func (p *Pool[T, P]) runWithAutoRefill(params []P) {
 		for {
 			select {
 			case <-doneChan:
-				p.dataSources.TryLock()
-				d := p.dataSources.data
+				var d []T
+				if p.dataSources.TryLock() {
+					d = p.dataSources.data
+				} else {
+					p.tryLock(&d)
+				}
 				p.dataSources.Unlock()
 				if len(d) != 0 {
 					p.spinUpGoroutine(doneChan, params)
@@ -197,6 +202,18 @@ func (p *Pool[T, P]) runWithAutoRefill(params []P) {
 		wg.Wait()
 		close(doneChan)
 	}(wg, doneChan)
+}
+
+func (p *Pool[T, P]) tryLock(d *[]T) {
+	time.Sleep(time.Millisecond)
+
+	locked := p.dataSources.TryLock()
+
+	if locked {
+		d = &p.dataSources.data
+		return
+	}
+	p.tryLock(d)
 }
 
 func (p *Pool[T, P]) spinUpGoroutine(doneChan chan struct{}, funcParams []P) {
