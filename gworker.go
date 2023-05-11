@@ -71,28 +71,28 @@ func (p *Pool[T]) Start(funcParams []any) {
 		p.size = 5
 	}
 
+	params := make([]any, len(p.valueChannels)+len(p.errorChannel)+len(funcParams))
+
+	if p.valueChannels != nil {
+		for i, vChan := range p.valueChannels {
+			params[i] = vChan
+		}
+	}
+
+	if p.errorChannel != nil {
+		if p.valueChannels != nil {
+			params[len(p.valueChannels)+1] = p.errorChannel
+		}
+	}
+
+	for i, param := range funcParams {
+		i = i + len(p.valueChannels) + len(p.errorChannel)
+		params[i] = param
+	}
+
 	if p.batched {
 		batchSlice := p.dataSources.data[:p.size]
 		remainingSlice := p.dataSources.data[p.size:]
-
-		params := make([]any, len(p.valueChannels)+len(p.errorChannel)+len(funcParams))
-
-		if p.valueChannels != nil {
-			for i, vChan := range p.valueChannels {
-				params[i] = vChan
-			}
-		}
-
-		if p.errorChannel != nil {
-			if p.valueChannels != nil {
-				params[len(p.valueChannels)+1] = p.errorChannel
-			}
-		}
-
-		for i, param := range funcParams {
-			i = i + len(p.valueChannels) + len(p.errorChannel)
-			params[i] = param
-		}
 
 		wg := &sync.WaitGroup{}
 
@@ -126,7 +126,78 @@ func (p *Pool[T]) Start(funcParams []any) {
 		wg.Wait()
 
 		p.checkContinueBatch(remainingSlice, funcParams)
+	} else {
+		doneChan := make(chan struct{})
+
+		for i := 0; i < p.size; i++ {
+			go func(p *Pool[T], doneChan chan struct{}) {
+				defer func() {
+					doneChan <- struct{}{}
+				}()
+
+				p.dataSources.Lock()
+				ds := p.dataSources.data[i]
+				p.dataSources.Unlock()
+
+				p.removeDataSourceByIndex(i)
+
+				p.workerFunc(ds, params)
+			}(p, doneChan)
+		}
+
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+
+		go func(p *Pool[T], doneChan chan struct{}, params []any) {
+			defer wg.Done()
+			for {
+				select {
+				case <-doneChan:
+					if len(p.dataSources.data) != 0 {
+						p.spinUpGoroutine(doneChan, params)
+					}
+				}
+			}
+		}(p, doneChan, params)
+
+		go func(wg *sync.WaitGroup, doneChan chan struct{}) {
+			wg.Wait()
+			close(doneChan)
+		}(wg, doneChan)
 	}
+}
+
+func (p *Pool[T]) initWorker(doneChan chan struct{}, params []any, i int) {
+	defer func() {
+		doneChan <- struct{}{}
+	}()
+
+	ds := p.dataSources.data[i]
+
+	p.removeDataSourceByIndex(i)
+
+	p.workerFunc(ds, params)
+}
+
+func (p *Pool[T]) spinUpGoroutine(doneChan chan struct{}, funcParams []any) {
+	p.dataSources.Lock()
+	ds := p.dataSources.data[0]
+	p.dataSources.Unlock()
+	p.removeDataSourceByIndex(0)
+
+	go func(p *Pool[T], doneChan chan struct{}) {
+		defer func() {
+			doneChan <- struct{}{}
+		}()
+		p.workerFunc(ds, funcParams)
+	}(p, doneChan)
+}
+
+func (p *Pool[T]) removeDataSourceByIndex(s int) {
+
+	p.dataSources.Lock()
+	defer p.dataSources.Unlock()
+	p.dataSources.data = append(p.dataSources.data[:s], p.dataSources.data[s+1:]...)
 }
 
 func (p *Pool[T]) checkContinueBatch(remainingSlice []T, funcParams []any) {
