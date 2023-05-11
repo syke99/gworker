@@ -13,7 +13,6 @@ type TestStruct struct {
 
 func Work(data any, params []any) {
 	gChan := params[0].(chan any)
-	dChan := params[1].(chan any)
 
 	d := data.(TestStruct)
 
@@ -22,22 +21,16 @@ func Work(data any, params []any) {
 	switch d.Greeting {
 	case "Hello":
 		gChan <- fmt.Sprint("This greeting is English")
-		dChan <- struct{}{}
 	case "Bonjour":
 		gChan <- fmt.Sprint("This greeting is French")
-		dChan <- struct{}{}
 	case "Hola":
 		gChan <- fmt.Sprint("This greeting is Spanish")
-		dChan <- struct{}{}
 	case "Ciao":
 		gChan <- fmt.Sprint("This greeting is Italian")
-		dChan <- struct{}{}
 	case "Ni Hao":
 		gChan <- fmt.Sprint("This greeting is Mandarin")
-		dChan <- struct{}{}
 	case "Kon'nichiwa":
 		gChan <- fmt.Sprint("This greeting is Japanese")
-		dChan <- struct{}{}
 	}
 }
 
@@ -53,10 +46,9 @@ func TestPool_Run(t *testing.T) {
 	data := []TestStruct{ds1, ds2, ds3, ds4, ds5, ds6}
 
 	greetingChan := make(chan any, 6)
-	doneChan := make(chan any, 6)
 
 	// Act
-	pool, err := NewPool(data, Work, []chan any{greetingChan, doneChan}, nil)
+	pool, err := NewPool(data, Work, []chan any{greetingChan}, nil)
 
 	// Assert
 	assert.NoError(t, err)
