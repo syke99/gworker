@@ -2,6 +2,7 @@ package gworker
 
 import (
 	"context"
+	"errors"
 	"sync"
 )
 
@@ -21,10 +22,15 @@ type dS[T any] struct {
 	data []T
 }
 
+var missingWorkerFuncError = errors.New("no worker func provided")
+
 // NewPool initializes a new Pool with the provided dataSources, worker func, any value and error channels, then returns it;
 // to prevent blocking and allow dataSources whose length is greater than the provided (or default) Size,
 // any channels used must be buffered channels
 func NewPool[T any](dataSources []T, worker func(dataSource any, params []any), valueChannels []chan any, errorChannel chan error) (*Pool[T], error) {
+	if worker == nil {
+		return nil, missingWorkerFuncError
+	}
 	p := Pool[T]{
 		batched: true,
 		dataSources: dS[T]{
