@@ -157,6 +157,9 @@ func (p *Pool[T, P]) runWithAutoRefill(params []P) {
 	doneChan := make(chan struct{})
 
 	for i := 0; i < p.size; i++ {
+
+		i := i
+
 		go func(p *Pool[T, P], doneChan chan struct{}) {
 			defer func() {
 				doneChan <- struct{}{}
@@ -180,7 +183,10 @@ func (p *Pool[T, P]) runWithAutoRefill(params []P) {
 		for {
 			select {
 			case <-doneChan:
-				if len(p.dataSources.data) != 0 {
+				p.dataSources.TryLock()
+				d := p.dataSources.data
+				p.dataSources.Unlock()
+				if len(d) != 0 {
 					p.spinUpGoroutine(doneChan, params)
 				}
 			}
