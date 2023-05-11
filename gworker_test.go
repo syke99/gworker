@@ -54,16 +54,15 @@ func TestPool_Run(t *testing.T) {
 	doneChan := make(chan any, 6)
 
 	// Act
-	pool, err := NewPool[TestStruct]([]TestStruct{ds1, ds2, ds3, ds4, ds5, ds6}, Work, []chan any{greetingChan, doneChan}, nil, nil)
+	pool, err := NewPool([]TestStruct{ds1, ds2, ds3, ds4, ds5, ds6}, Work, []chan any{greetingChan, doneChan}, nil, nil)
 
 	// Assert
 	assert.NoError(t, err)
 
 	// Act
 	pool.
-		Batched().
 		Size(3).
-		Run()
+		Start()
 
 	counter := 0
 
