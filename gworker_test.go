@@ -123,7 +123,7 @@ func TestPool_StartWithAutoRefill(t *testing.T) {
 
 	data := []TestStruct{ds1, ds2, ds3, ds4, ds5, ds6}
 
-	greetingChan := make(chan any, 6)
+	greetingChan := make(chan any)
 
 	// Act
 	pool, err := NewPool(data, Work, []chan any{greetingChan}, nil)
