@@ -133,56 +133,60 @@ func (p *Pool[T]) Start(funcParams []any) {
 
 		p.checkContinueBatch(remainingSlice, funcParams)
 	} else {
-		doneChan := make(chan struct{})
-
-		for i := 0; i < p.size; i++ {
-			go func(p *Pool[T], doneChan chan struct{}) {
-				defer func() {
-					doneChan <- struct{}{}
-				}()
-
-				p.dataSources.Lock()
-				ds := p.dataSources.data[i]
-				p.dataSources.Unlock()
-
-				p.removeDataSourceByIndex(i)
-
-				p.workerFunc(ds, params)
-			}(p, doneChan)
-		}
-
-		wg := &sync.WaitGroup{}
-		wg.Add(1)
-
-		go func(p *Pool[T], doneChan chan struct{}, params []any) {
-			defer wg.Done()
+		if p.ctx != nil {
 			for {
 				select {
-				case <-doneChan:
-					if len(p.dataSources.data) != 0 {
-						p.spinUpGoroutine(doneChan, params)
-					}
+				case <-p.ctx.Done():
+					return
+				default:
+					p.runWithAutoRefill(params)
 				}
 			}
-		}(p, doneChan, params)
+		} else {
+			p.runWithAutoRefill(params)
+		}
 
-		go func(wg *sync.WaitGroup, doneChan chan struct{}) {
-			wg.Wait()
-			close(doneChan)
-		}(wg, doneChan)
 	}
 }
 
-func (p *Pool[T]) initWorker(doneChan chan struct{}, params []any, i int) {
-	defer func() {
-		doneChan <- struct{}{}
-	}()
+func (p *Pool[T]) runWithAutoRefill(params []any) {
+	doneChan := make(chan struct{})
 
-	ds := p.dataSources.data[i]
+	for i := 0; i < p.size; i++ {
+		go func(p *Pool[T], doneChan chan struct{}) {
+			defer func() {
+				doneChan <- struct{}{}
+			}()
 
-	p.removeDataSourceByIndex(i)
+			p.dataSources.Lock()
+			ds := p.dataSources.data[i]
+			p.dataSources.Unlock()
 
-	p.workerFunc(ds, params)
+			p.removeDataSourceByIndex(i)
+
+			p.workerFunc(ds, params)
+		}(p, doneChan)
+	}
+
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+
+	go func(p *Pool[T], doneChan chan struct{}, params []any) {
+		defer wg.Done()
+		for {
+			select {
+			case <-doneChan:
+				if len(p.dataSources.data) != 0 {
+					p.spinUpGoroutine(doneChan, params)
+				}
+			}
+		}
+	}(p, doneChan, params)
+
+	go func(wg *sync.WaitGroup, doneChan chan struct{}) {
+		wg.Wait()
+		close(doneChan)
+	}(wg, doneChan)
 }
 
 func (p *Pool[T]) spinUpGoroutine(doneChan chan struct{}, funcParams []any) {
