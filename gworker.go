@@ -7,11 +7,11 @@ import (
 )
 
 // Pool is a Generic worker pool implementation
-type Pool[T any] struct {
+type Pool[T any, P any] struct {
 	size          int
 	batched       bool
 	dataSources   dS[T]
-	workerFunc    func(dataSource any, params []any)
+	workerFunc    func(dataSource T, params []P)
 	valueChannels []chan any
 	errorChannel  chan error
 	ctx           context.Context
@@ -27,11 +27,11 @@ var missingWorkerFuncError = errors.New("no worker func provided")
 // NewPool initializes a new Pool with the provided dataSources, worker func, any value and error channels, then returns it;
 // to prevent blocking and allow dataSources whose length is greater than the provided (or default) Size,
 // any channels used must be buffered channels
-func NewPool[T any](dataSources []T, worker func(dataSource any, params []any), valueChannels []chan any, errorChannel chan error) (*Pool[T], error) {
+func NewPool[T any, P any](dataSources []T, worker func(dataSource T, params []P), valueChannels []chan any, errorChannel chan error) (*Pool[T, P], error) {
 	if worker == nil {
 		return nil, missingWorkerFuncError
 	}
-	p := Pool[T]{
+	p := Pool[T, P]{
 		batched: true,
 		dataSources: dS[T]{
 			data: dataSources,
@@ -45,7 +45,7 @@ func NewPool[T any](dataSources []T, worker func(dataSource any, params []any), 
 
 // Size determines the max number of concurrent workers to run at once whenever the Pool has
 // been started. If Size is not called, a Pool will default to a size of 5
-func (p *Pool[T]) Size(size int) *Pool[T] {
+func (p *Pool[T, P]) Size(size int) *Pool[T, P] {
 	p.size = size
 	return p
 }
@@ -55,14 +55,14 @@ func (p *Pool[T]) Size(size int) *Pool[T] {
 // until all the dataSources are exhausted) to an "AutoPoolRefill" state (where, as soon as one
 // worker goroutine finishes, if any dataSources remain, another worker goroutine will immediately
 // be spun up until all dataSources have been exhausted)
-func (p *Pool[T]) WithAutoPoolRefill() *Pool[T] {
+func (p *Pool[T, P]) WithAutoPoolRefill() *Pool[T, P] {
 	p.batched = false
 	return p
 }
 
 // WithCancel allows you to provide a Pool with a context and be returned a context.CancelFunc
 // that can be called to prematurely terminated a started Pool
-func (p *Pool[T]) WithCancel(ctx context.Context) (*Pool[T], context.CancelFunc) {
+func (p *Pool[T, P]) WithCancel(ctx context.Context) (*Pool[T, P], context.CancelFunc) {
 	c, cancel := context.WithCancel(ctx)
 
 	p.ctx = c
@@ -72,22 +72,26 @@ func (p *Pool[T]) WithCancel(ctx context.Context) (*Pool[T], context.CancelFunc)
 
 // Start starts running the Pool's workers and injects any provided channels, along with the
 // provided funcParams, to each worker goroutine
-func (p *Pool[T]) Start(funcParams []any) {
+func (p *Pool[T, P]) Start(funcParams []P) {
 	if p.size == 0 {
 		p.size = 5
 	}
 
-	params := make([]any, len(p.valueChannels)+len(p.errorChannel)+len(funcParams))
+	params := make([]P, len(p.valueChannels)+len(p.errorChannel)+len(funcParams))
 
 	if p.valueChannels != nil {
 		for i, vChan := range p.valueChannels {
-			params[i] = vChan
+			if v, ok := any(vChan).(P); ok {
+				params[i] = v
+			}
 		}
 	}
 
 	if p.errorChannel != nil {
 		if p.valueChannels != nil {
-			params[len(p.valueChannels)+1] = p.errorChannel
+			if v, ok := any(p.errorChannel).(P); ok {
+				params[len(p.valueChannels)+1] = v
+			}
 		}
 	}
 
@@ -109,7 +113,7 @@ func (p *Pool[T]) Start(funcParams []any) {
 			i := i
 
 			if p.ctx != nil {
-				go func(p *Pool[T]) {
+				go func(p *Pool[T, P]) {
 					defer wg.Done()
 					for {
 						select {
@@ -121,7 +125,7 @@ func (p *Pool[T]) Start(funcParams []any) {
 					}
 				}(p)
 			} else {
-				go func(p *Pool[T]) {
+				go func(p *Pool[T, P]) {
 					defer wg.Done()
 
 					p.workerFunc(p.dataSources.data[i], params)
@@ -149,11 +153,11 @@ func (p *Pool[T]) Start(funcParams []any) {
 	}
 }
 
-func (p *Pool[T]) runWithAutoRefill(params []any) {
+func (p *Pool[T, P]) runWithAutoRefill(params []P) {
 	doneChan := make(chan struct{})
 
 	for i := 0; i < p.size; i++ {
-		go func(p *Pool[T], doneChan chan struct{}) {
+		go func(p *Pool[T, P], doneChan chan struct{}) {
 			defer func() {
 				doneChan <- struct{}{}
 			}()
@@ -171,7 +175,7 @@ func (p *Pool[T]) runWithAutoRefill(params []any) {
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 
-	go func(p *Pool[T], doneChan chan struct{}, params []any) {
+	go func(p *Pool[T, P], doneChan chan struct{}, params []P) {
 		defer wg.Done()
 		for {
 			select {
@@ -189,13 +193,13 @@ func (p *Pool[T]) runWithAutoRefill(params []any) {
 	}(wg, doneChan)
 }
 
-func (p *Pool[T]) spinUpGoroutine(doneChan chan struct{}, funcParams []any) {
+func (p *Pool[T, P]) spinUpGoroutine(doneChan chan struct{}, funcParams []P) {
 	p.dataSources.Lock()
 	ds := p.dataSources.data[0]
 	p.dataSources.Unlock()
 	p.removeDataSourceByIndex(0)
 
-	go func(p *Pool[T], doneChan chan struct{}) {
+	go func(p *Pool[T, P], doneChan chan struct{}) {
 		defer func() {
 			doneChan <- struct{}{}
 		}()
@@ -203,14 +207,14 @@ func (p *Pool[T]) spinUpGoroutine(doneChan chan struct{}, funcParams []any) {
 	}(p, doneChan)
 }
 
-func (p *Pool[T]) removeDataSourceByIndex(s int) {
+func (p *Pool[T, P]) removeDataSourceByIndex(s int) {
 
 	p.dataSources.Lock()
 	defer p.dataSources.Unlock()
 	p.dataSources.data = append(p.dataSources.data[:s], p.dataSources.data[s+1:]...)
 }
 
-func (p *Pool[T]) checkContinueBatch(remainingSlice []T, funcParams []any) {
+func (p *Pool[T, P]) checkContinueBatch(remainingSlice []T, funcParams []P) {
 	if len(remainingSlice) != 0 {
 		p.dataSources.data = remainingSlice
 		p.Start(funcParams)

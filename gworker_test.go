@@ -11,14 +11,12 @@ type TestStruct struct {
 	Greeting string
 }
 
-func Work(data any, params []any) {
+func Work(data TestStruct, params []any) {
 	gChan := params[0].(chan any)
-
-	d := data.(TestStruct)
 
 	time.Sleep(time.Second * 1)
 
-	switch d.Greeting {
+	switch data.Greeting {
 	case "Hello":
 		gChan <- fmt.Sprint("This greeting is English")
 	case "Bonjour":
@@ -69,7 +67,7 @@ func TestNewPool_MissingWorkerFunc(t *testing.T) {
 	greetingChan := make(chan any, 6)
 
 	// Act
-	pool, err := NewPool(data, nil, []chan any{greetingChan}, nil)
+	pool, err := NewPool[TestStruct, any](data, nil, []chan any{greetingChan}, nil)
 
 	// Assert
 	assert.Error(t, err)
