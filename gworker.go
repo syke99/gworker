@@ -36,6 +36,7 @@ func NewPool[T any, P any](dataSources []T, worker func(dataSource T, params []P
 		dataSources: dS[T]{
 			data: dataSources,
 		},
+		size:       5,
 		errChan:    errorChannel,
 		workerFunc: worker,
 	}
@@ -72,8 +73,10 @@ func (p *Pool[T, P]) WithCancel(ctx context.Context) (*Pool[T, P], context.Cance
 // Start starts running the Pool's workers and injects any provided channels, along with the
 // provided funcParams, to each worker goroutine
 func (p *Pool[T, P]) Start(funcParams []P) {
-	if p.size == 0 {
-		p.size = 5
+	dataLen := len(p.dataSources.data)
+
+	if p.size > dataLen {
+		p.size = dataLen
 	}
 
 	if p.batched {
