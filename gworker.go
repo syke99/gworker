@@ -9,13 +9,12 @@ import (
 
 // Pool is a Generic worker pool implementation
 type Pool[T any, P any] struct {
-	size          int
-	batched       bool
-	dataSources   dS[T]
-	workerFunc    func(dataSource T, params []P)
-	valueChannels []chan any
-	errorChannel  chan error
-	ctx           context.Context
+	size        int
+	batched     bool
+	dataSources dS[T]
+	workerFunc  func(dataSource T, params []P, errChan chan error)
+	errChan     chan error
+	ctx         context.Context
 }
 
 type dS[T any] struct {
@@ -28,7 +27,7 @@ var missingWorkerFuncError = errors.New("no worker func provided")
 // NewPool initializes a new Pool with the provided dataSources, worker func, any value and error channels, then returns it;
 // to prevent blocking and allow dataSources whose length is greater than the provided (or default) Size,
 // any channels used must be buffered channels
-func NewPool[T any, P any](dataSources []T, worker func(dataSource T, params []P), valueChannels []chan any, errorChannel chan error) (*Pool[T, P], error) {
+func NewPool[T any, P any](dataSources []T, worker func(dataSource T, params []P, errChan chan error), errorChannel chan error) (*Pool[T, P], error) {
 	if worker == nil {
 		return nil, missingWorkerFuncError
 	}
@@ -37,9 +36,8 @@ func NewPool[T any, P any](dataSources []T, worker func(dataSource T, params []P
 		dataSources: dS[T]{
 			data: dataSources,
 		},
-		valueChannels: valueChannels,
-		errorChannel:  errorChannel,
-		workerFunc:    worker,
+		errChan:    errorChannel,
+		workerFunc: worker,
 	}
 	return &p, nil
 }
@@ -78,29 +76,6 @@ func (p *Pool[T, P]) Start(funcParams []P) {
 		p.size = 5
 	}
 
-	params := make([]P, len(p.valueChannels)+len(p.errorChannel)+len(funcParams))
-
-	if p.valueChannels != nil {
-		for i, vChan := range p.valueChannels {
-			if v, ok := any(vChan).(P); ok {
-				params[i] = v
-			}
-		}
-	}
-
-	if p.errorChannel != nil {
-		if p.valueChannels != nil {
-			if v, ok := any(p.errorChannel).(P); ok {
-				params[len(p.valueChannels)+1] = v
-			}
-		}
-	}
-
-	for i, param := range funcParams {
-		i = i + len(p.valueChannels) + len(p.errorChannel)
-		params[i] = param
-	}
-
 	if p.batched {
 		batchSlice := p.dataSources.data[:p.size]
 		remainingSlice := p.dataSources.data[p.size:]
@@ -121,7 +96,7 @@ func (p *Pool[T, P]) Start(funcParams []P) {
 						case <-p.ctx.Done():
 							return
 						default:
-							p.workerFunc(p.dataSources.data[i], params)
+							p.workerFunc(p.dataSources.data[i], funcParams, p.errChan)
 						}
 					}
 				}(p)
@@ -129,7 +104,7 @@ func (p *Pool[T, P]) Start(funcParams []P) {
 				go func(p *Pool[T, P]) {
 					defer wg.Done()
 
-					p.workerFunc(p.dataSources.data[i], params)
+					p.workerFunc(p.dataSources.data[i], funcParams, p.errChan)
 				}(p)
 			}
 		}
@@ -144,11 +119,11 @@ func (p *Pool[T, P]) Start(funcParams []P) {
 				case <-p.ctx.Done():
 					return
 				default:
-					p.runWithAutoRefill(params)
+					p.runWithAutoRefill(funcParams)
 				}
 			}
 		} else {
-			p.runWithAutoRefill(params)
+			p.runWithAutoRefill(funcParams)
 		}
 
 	}
@@ -172,7 +147,7 @@ func (p *Pool[T, P]) runWithAutoRefill(params []P) {
 
 			p.removeDataSourceByIndex(i)
 
-			p.workerFunc(ds, params)
+			p.workerFunc(ds, params, p.errChan)
 		}(p, doneChan)
 	}
 
@@ -226,7 +201,7 @@ func (p *Pool[T, P]) spinUpGoroutine(doneChan chan struct{}, funcParams []P) {
 		defer func() {
 			doneChan <- struct{}{}
 		}()
-		p.workerFunc(ds, funcParams)
+		p.workerFunc(ds, funcParams, p.errChan)
 	}(p, doneChan)
 }
 
