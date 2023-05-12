@@ -41,7 +41,8 @@ so:
 ```go
 // TestStruct is simply an example of a data source
 type TestStruct struct {
-	// if you need/want to send values back out of the worker func, add a value channel,
+	// if you need/want to send values back
+ // out of the worker func, add a value channel,
 	// in this case, gChan
 	gChan chan string
 	Greeting string
@@ -98,26 +99,20 @@ that will run at one time, as well as opt for auto-refilling the pool with new w
 funcs as soon as one finished if any data sources are left like so:
 
 ```go
-    // Set the maximum number of worker funcs to run at once with .Size()
-    // NOTE: if .Size() is not called, Gworker will default to a size of 5
-    pool.Size(3)
+// Set the maximum number of worker funcs to run at once with .Size()
+// NOTE: if .Size() is not called, Gworker will default to a size of 5
+pool.Size(3)
 
-    // optionally automatically refill the pool with a new worker func 
-    // as soon as another finishes by calling .WithAutoPoolRefill()
-    // NOTE: if .WithAutoPoolRefill() is called, any channels provided
-    // NOTE: do not need to be buffered
-    pool.WithAutoPoolRefill()
+// optionally automatically refill the pool with a new worker func 
+// as soon as another finishes by calling .WithAutoPoolRefill()
+// NOTE: if .WithAutoPoolRefill() is called, any channels provided
+// NOTE: do not need to be buffered
+pool.WithAutoPoolRefill()
 ```
 
 Once your new Gworker pool has been configured, simply call .Start() and pass in any
 additional func params you'd like to be used in the worker funcs. If you don't wish
-to have any additional params, simply pass in nil
-
-**!!NOTE!!**
-
-if channels are provided (both value and error), they will be the leading values in the
-params passed to each worker func in the same order they were provided whenever calling
-NewPool with value channels leading, followed by the error channel if they exist
+to have any additional params, simply pass in 
 
 ```go
     pool.Start()
@@ -198,4 +193,4 @@ This library was developed by Quinn Millican ([@syke99](https://github.com/syke9
 
 ## License
 
-This repo is under the BSD 3 license, see [LICENSE](../LICENSE) for details.
+This repo is under the MIT license, see [LICENSE](../LICENSE) for details.
