@@ -193,4 +193,4 @@ This library was developed by Quinn Millican ([@syke99](https://github.com/syke9
 
 ## License
 
-This repo is under the BSD 3 license, see [LICENSE](../LICENSE) for details.
+This repo is under the MIT license, see [LICENSE](../LICENSE) for details.
