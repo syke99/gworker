@@ -12,41 +12,41 @@ type TestStruct struct {
 	Greeting string
 }
 
-func Work(data TestStruct, params []TestStruct, errChan chan error) {
+func Work(data Data[any], params []TestStruct, errChan chan error) {
 
 	time.Sleep(time.Second * 1)
 
-	switch data.Greeting {
+	switch data.Value {
 	case "Hello":
-		data.gChan <- fmt.Sprint("This greeting is English")
+		data.OutChan <- fmt.Sprint("This greeting is English")
 	case "Bonjour":
-		data.gChan <- fmt.Sprint("This greeting is French")
+		data.OutChan <- fmt.Sprint("This greeting is French")
 	case "Hola":
-		data.gChan <- fmt.Sprint("This greeting is Spanish")
+		data.OutChan <- fmt.Sprint("This greeting is Spanish")
 	case "Ciao":
-		data.gChan <- fmt.Sprint("This greeting is Italian")
+		data.OutChan <- fmt.Sprint("This greeting is Italian")
 	case "Ni Hao":
-		data.gChan <- fmt.Sprint("This greeting is Mandarin")
+		data.OutChan <- fmt.Sprint("This greeting is Mandarin")
 	case "Kon'nichiwa":
-		data.gChan <- fmt.Sprint("This greeting is Japanese")
+		data.OutChan <- fmt.Sprint("This greeting is Japanese")
 	}
 }
 
 func TestNewPool(t *testing.T) {
 	// Arrange
-	greetingChan := make(chan string, 6)
+	greetingChan := make(chan any, 6)
 
-	ds1 := TestStruct{Greeting: "Hello", gChan: greetingChan}
-	ds2 := TestStruct{Greeting: "Bonjour", gChan: greetingChan}
-	ds3 := TestStruct{Greeting: "Hola", gChan: greetingChan}
-	ds4 := TestStruct{Greeting: "Ciao", gChan: greetingChan}
-	ds5 := TestStruct{Greeting: "Ni Hao", gChan: greetingChan}
-	ds6 := TestStruct{Greeting: "Kon'nichiwa", gChan: greetingChan}
+	ds1 := Data[any]{Value: "Hello", OutChan: greetingChan}
+	ds2 := Data[any]{Value: "Bonjour", OutChan: greetingChan}
+	ds3 := Data[any]{Value: "Hola", OutChan: greetingChan}
+	ds4 := Data[any]{Value: "Ciao", OutChan: greetingChan}
+	ds5 := Data[any]{Value: "Ni Hao", OutChan: greetingChan}
+	ds6 := Data[any]{Value: "Kon'nichiwa", OutChan: greetingChan}
 
-	data := []TestStruct{ds1, ds2, ds3, ds4, ds5, ds6}
+	data := []Data[any]{ds1, ds2, ds3, ds4, ds5, ds6}
 
 	// Act
-	pool, err := NewPool(data, Work, nil)
+	pool, err := NewPool[Data[any]](data, Work, nil)
 
 	// Assert
 	assert.NoError(t, err)
@@ -55,19 +55,19 @@ func TestNewPool(t *testing.T) {
 
 func TestNewPool_MissingWorkerFunc(t *testing.T) {
 	// Arrange
-	greetingChan := make(chan string, 6)
+	greetingChan := make(chan any, 6)
 
-	ds1 := TestStruct{Greeting: "Hello", gChan: greetingChan}
-	ds2 := TestStruct{Greeting: "Bonjour", gChan: greetingChan}
-	ds3 := TestStruct{Greeting: "Hola", gChan: greetingChan}
-	ds4 := TestStruct{Greeting: "Ciao", gChan: greetingChan}
-	ds5 := TestStruct{Greeting: "Ni Hao", gChan: greetingChan}
-	ds6 := TestStruct{Greeting: "Kon'nichiwa", gChan: greetingChan}
+	ds1 := Data[any]{Value: "Hello", OutChan: greetingChan}
+	ds2 := Data[any]{Value: "Bonjour", OutChan: greetingChan}
+	ds3 := Data[any]{Value: "Hola", OutChan: greetingChan}
+	ds4 := Data[any]{Value: "Ciao", OutChan: greetingChan}
+	ds5 := Data[any]{Value: "Ni Hao", OutChan: greetingChan}
+	ds6 := Data[any]{Value: "Kon'nichiwa", OutChan: greetingChan}
 
-	data := []TestStruct{ds1, ds2, ds3, ds4, ds5, ds6}
+	data := []Data[any]{ds1, ds2, ds3, ds4, ds5, ds6}
 
 	// Act
-	pool, err := NewPool[TestStruct, any](data, nil, nil)
+	pool, err := NewPool[Data[any], any](data, nil, nil)
 
 	// Assert
 	assert.Error(t, err)
@@ -77,19 +77,19 @@ func TestNewPool_MissingWorkerFunc(t *testing.T) {
 
 func TestPool_Start(t *testing.T) {
 	// Arrange
-	greetingChan := make(chan string, 6)
+	greetingChan := make(chan any, 6)
 
-	ds1 := TestStruct{Greeting: "Hello", gChan: greetingChan}
-	ds2 := TestStruct{Greeting: "Bonjour", gChan: greetingChan}
-	ds3 := TestStruct{Greeting: "Hola", gChan: greetingChan}
-	ds4 := TestStruct{Greeting: "Ciao", gChan: greetingChan}
-	ds5 := TestStruct{Greeting: "Ni Hao", gChan: greetingChan}
-	ds6 := TestStruct{Greeting: "Kon'nichiwa", gChan: greetingChan}
+	ds1 := Data[any]{Value: "Hello", OutChan: greetingChan}
+	ds2 := Data[any]{Value: "Bonjour", OutChan: greetingChan}
+	ds3 := Data[any]{Value: "Hola", OutChan: greetingChan}
+	ds4 := Data[any]{Value: "Ciao", OutChan: greetingChan}
+	ds5 := Data[any]{Value: "Ni Hao", OutChan: greetingChan}
+	ds6 := Data[any]{Value: "Kon'nichiwa", OutChan: greetingChan}
 
-	data := []TestStruct{ds1, ds2, ds3, ds4, ds5, ds6}
+	data := []Data[any]{ds1, ds2, ds3, ds4, ds5, ds6}
 
 	// Act
-	pool, err := NewPool(data, Work, nil)
+	pool, err := NewPool[Data[any]](data, Work, nil)
 
 	// Assert
 	assert.NoError(t, err)
@@ -102,7 +102,7 @@ func TestPool_Start(t *testing.T) {
 	counter := 0
 
 	for g := range greetingChan {
-		fmt.Println(g)
+		fmt.Println(g.(string))
 		counter++
 		if counter == 6 {
 			close(greetingChan)
@@ -112,19 +112,19 @@ func TestPool_Start(t *testing.T) {
 
 func TestPool_StartWithAutoRefill(t *testing.T) {
 	// Arrange
-	greetingChan := make(chan string, 6)
+	greetingChan := make(chan any, 6)
 
-	ds1 := TestStruct{Greeting: "Hello", gChan: greetingChan}
-	ds2 := TestStruct{Greeting: "Bonjour", gChan: greetingChan}
-	ds3 := TestStruct{Greeting: "Hola", gChan: greetingChan}
-	ds4 := TestStruct{Greeting: "Ciao", gChan: greetingChan}
-	ds5 := TestStruct{Greeting: "Ni Hao", gChan: greetingChan}
-	ds6 := TestStruct{Greeting: "Kon'nichiwa", gChan: greetingChan}
+	ds1 := Data[any]{Value: "Hello", OutChan: greetingChan}
+	ds2 := Data[any]{Value: "Bonjour", OutChan: greetingChan}
+	ds3 := Data[any]{Value: "Hola", OutChan: greetingChan}
+	ds4 := Data[any]{Value: "Ciao", OutChan: greetingChan}
+	ds5 := Data[any]{Value: "Ni Hao", OutChan: greetingChan}
+	ds6 := Data[any]{Value: "Kon'nichiwa", OutChan: greetingChan}
 
-	data := []TestStruct{ds1, ds2, ds3, ds4, ds5, ds6}
+	data := []Data[any]{ds1, ds2, ds3, ds4, ds5, ds6}
 
 	// Act
-	pool, err := NewPool(data, Work, nil)
+	pool, err := NewPool[Data[any]](data, Work, nil)
 
 	// Assert
 	assert.NoError(t, err)
@@ -138,7 +138,7 @@ func TestPool_StartWithAutoRefill(t *testing.T) {
 	counter := 0
 
 	for g := range greetingChan {
-		fmt.Println(g)
+		fmt.Println(g.(string))
 		counter++
 		if counter == 6 {
 			close(greetingChan)

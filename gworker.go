@@ -8,7 +8,7 @@ import (
 )
 
 // Pool is a Generic worker pool implementation
-type Pool[T any, P any] struct {
+type Pool[T Data[any], P any] struct {
 	size        int
 	batched     bool
 	dataSources dS[T]
@@ -22,12 +22,17 @@ type dS[T any] struct {
 	data []T
 }
 
+type Data[T any] struct {
+	OutChan chan any
+	Value   T
+}
+
 var missingWorkerFuncError = errors.New("no worker func provided")
 
 // NewPool initializes a new Pool with the provided dataSources, worker func, any value and error channels, then returns it;
 // to prevent blocking and allow dataSources whose length is greater than the provided (or default) Size,
 // any channels used must be buffered channels
-func NewPool[T any, P any](dataSources []T, worker func(dataSource T, params []P, errChan chan error), errorChannel chan error) (*Pool[T, P], error) {
+func NewPool[T Data[any], P any](dataSources []T, worker func(dataSource T, params []P, errorChannel chan error), errorChannel chan error) (*Pool[T, P], error) {
 	if worker == nil {
 		return nil, missingWorkerFuncError
 	}
