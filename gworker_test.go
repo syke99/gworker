@@ -132,7 +132,7 @@ func TestPool_StartWithAutoRefill(t *testing.T) {
 	// Act
 	pool.
 		Size(3).
-		WithAutoPoolRefill().
+		WithAutoRefill().
 		Start(nil)
 
 	counter := 0
