@@ -96,6 +96,8 @@ func (p *Pool[T, P]) WithCancel(ctx context.Context) *Pool[T, P] {
 // Start starts running the Pool's workers and injects any provided channels, along with the
 // provided funcParams, to each worker goroutine
 func (p *Pool[T, P]) Start(funcParams []P) {
+	p.started = true
+
 	if p.ctx == nil &&
 		!p.batched {
 		p.ctx, p.cancel = context.WithCancel(context.Background())
@@ -178,11 +180,14 @@ func (p *Pool[T, P]) Start(funcParams []P) {
 					}
 					p.dataSources.Unlock()
 					counter.Add(^uint64(0))
-					if l != 0 &&
+					if l%p.size != 0 &&
+						p.started {
+						continue
+					} else if l != 0 &&
 						int(counter.Load()) != 0 {
 						p.replenishPool(&counter, doneChan, funcParams)
 					} else {
-						continue
+						return
 					}
 				default:
 					var l = 0
@@ -193,7 +198,10 @@ func (p *Pool[T, P]) Start(funcParams []P) {
 						l = len(p.dataSources.data)
 					}
 					p.dataSources.Unlock()
-					if l != 0 {
+
+					if l%p.size != 0 {
+						continue
+					} else if l != 0 {
 						p.replenishPool(&counter, doneChan, funcParams)
 					} else {
 						return
@@ -201,8 +209,6 @@ func (p *Pool[T, P]) Start(funcParams []P) {
 				}
 			}
 		}
-		done <- struct{}{}
-		close(doneChan)
 	}
 	if !p.batched {
 		<-p.doneChan

@@ -236,6 +236,7 @@ func TestPool_Start_WithCancel(t *testing.T) {
 func TestPool_StartWithAutoRefill(t *testing.T) {
 	// Arrange
 	greetingChan := make(chan string, 6)
+	defer close(greetingChan)
 
 	ds1 := TestStruct{Greeting: "Hello", gChan: greetingChan}
 	ds2 := TestStruct{Greeting: "Bonjour", gChan: greetingChan}
@@ -273,5 +274,5 @@ func TestPool_StartWithAutoRefill(t *testing.T) {
 		}
 	}
 
-	close(greetingChan)
+	//close(greetingChan)
 }
