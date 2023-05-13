@@ -18,6 +18,7 @@ type Pool[T any, P any] struct {
 	errChan     chan error
 	ctx         context.Context
 	cancel      context.CancelFunc
+	doneChan    chan struct{}
 }
 
 type dS[T any] struct {
@@ -109,9 +110,9 @@ func (p *Pool[T, P]) Start(funcParams []P) {
 	var counter atomic.Uint64
 
 	doneChan := make(chan struct{})
-	defer close(doneChan)
 
 	if p.batched {
+		defer close(doneChan)
 		batchSlice := p.dataSources.data[:p.size]
 		remainingSlice := p.dataSources.data[p.size:]
 
@@ -124,7 +125,7 @@ func (p *Pool[T, P]) Start(funcParams []P) {
 			i := i
 
 			if p.cancel != nil {
-				go func(p *Pool[T, P]) {
+				go func(p *Pool[T, P], wg *sync.WaitGroup) {
 					defer wg.Done()
 					for {
 						select {
@@ -134,7 +135,7 @@ func (p *Pool[T, P]) Start(funcParams []P) {
 							p.workerFunc(p.dataSources.data[i], funcParams, p.errChan)
 						}
 					}
-				}(p)
+				}(p, wg)
 			} else {
 				go func(p *Pool[T, P]) {
 					defer wg.Done()
@@ -144,10 +145,24 @@ func (p *Pool[T, P]) Start(funcParams []P) {
 			}
 		}
 
-		wg.Wait()
+		switch p.cancel == nil {
+		case true:
+			wg.Wait()
+		case false:
+			go func(wg *sync.WaitGroup) {
+				wg.Wait()
+			}(wg)
+		}
 
 		p.checkContinueBatch(remainingSlice, funcParams)
 	} else {
+		var done chan struct{}
+		if p.doneChan != nil {
+			done = p.doneChan
+		} else {
+			done = make(chan struct{})
+			p.doneChan = done
+		}
 		if p.ctx != nil {
 			for {
 				select {
@@ -162,6 +177,7 @@ func (p *Pool[T, P]) Start(funcParams []P) {
 						l = len(p.dataSources.data)
 					}
 					p.dataSources.Unlock()
+					counter.Add(^uint64(0))
 					if l != 0 &&
 						int(counter.Load()) != 0 {
 						p.replenishPool(&counter, doneChan, funcParams)
@@ -185,6 +201,11 @@ func (p *Pool[T, P]) Start(funcParams []P) {
 				}
 			}
 		}
+		done <- struct{}{}
+		close(doneChan)
+	}
+	if !p.batched {
+		<-p.doneChan
 	}
 }
 
@@ -296,5 +317,6 @@ func (p *Pool[T, P]) checkContinueBatch(remainingSlice []T, funcParams []P) {
 	if len(remainingSlice) != 0 {
 		p.dataSources.data = remainingSlice
 		p.Start(funcParams)
+		return
 	}
 }
